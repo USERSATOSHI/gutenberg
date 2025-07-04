@@ -78,9 +78,17 @@ export function getBlockContentSchemaFromTransforms( transforms, context ) {
 	// isMatch properties.
 	function mergeTagNameSchemas( a, b ) {
 		for ( const key in b ) {
-			a[ key ] = a[ key ]
-				? mergeTagNameSchemaProperties( a[ key ], b[ key ], key )
-				: { ...b[ key ] };
+			if ( a[ key ] ) {
+				a[ key ] = mergeTagNameSchemaProperties(
+					a[ key ],
+					b[ key ],
+					key
+				);
+			} else {
+				a[ key ] = Array.isArray( b[ key ] )
+					? b[ key ].slice()
+					: { ...b[ key ] };
+			}
 		}
 		return a;
 	}
@@ -88,9 +96,13 @@ export function getBlockContentSchemaFromTransforms( transforms, context ) {
 	// A schema is an object with tagName schemas by tag name.
 	function mergeSchemas( a, b ) {
 		for ( const key in b ) {
-			a[ key ] = a[ key ]
-				? mergeTagNameSchemas( a[ key ], b[ key ] )
-				: { ...b[ key ] };
+			if ( a[ key ] ) {
+				a[ key ] = mergeTagNameSchemas( a[ key ], b[ key ] );
+			} else {
+				a[ key ] = Array.isArray( b[ key ] )
+					? b[ key ].slice()
+					: { ...b[ key ] };
+			}
 		}
 		return a;
 	}

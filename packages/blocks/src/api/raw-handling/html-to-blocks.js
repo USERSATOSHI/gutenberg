@@ -2,6 +2,7 @@
  * WordPress dependencies
  */
 import { Platform } from '@wordpress/element';
+import { store as editorStore } from '@wordpress/editor';
 
 /**
  * Internal dependencies
@@ -10,6 +11,24 @@ import { createBlock, findTransform } from '../factory';
 import parse from '../parser';
 import { getBlockAttributes } from '../parser/get-block-attributes';
 import { getRawTransforms } from './get-raw-transforms';
+import { select, dispatch } from '@wordpress/data';
+
+function extractFootnotes( html ) {
+	const footnotes = [];
+
+	// Select all footnote spans inside <li>
+	const spanNodes = html.querySelectorAll( 'ol.wp-block-footnotes span' );
+
+	spanNodes.forEach( ( span ) => {
+		const id = span.getAttribute( 'id' );
+		const content = span.textContent.trim();
+		if ( id || content ) {
+			footnotes.push( { id, content } );
+		}
+	} );
+
+	return footnotes;
+}
 
 /**
  * Converts HTML directly to blocks. Looks for a matching transform for each
@@ -55,6 +74,30 @@ export function htmlToBlocks( html, handler ) {
 			if ( node.hasAttribute( 'class' ) ) {
 				block.attributes.className = node.getAttribute( 'class' );
 			}
+
+			if ( blockName === 'core/footnotes' ) {
+				block.attributes.className =
+					'block-editor-block-list__block wp-block wp-block-footnotes';
+				node.className =
+					'block-editor-block-list__block wp-block wp-block-footnotes';
+
+				const currentMeta =
+					select( editorStore ).getEditedPostAttribute( 'meta' );
+
+				const footnotes = extractFootnotes( node );
+
+				const newMeta = {
+					...currentMeta,
+					footnotes: JSON.stringify( footnotes ),
+				};
+
+				// shift the dispatch call for next tick to allow footnotes generation from `sup` tag.
+				setTimeout(
+					() => dispatch( editorStore ).editPost( { meta: newMeta } ),
+					0
+				);
+			}
+
 			return block;
 		}
 
