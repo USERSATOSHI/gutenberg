@@ -60,25 +60,6 @@ function getFootnotesContentSchema() {
 			classes: [ '*' ],
 			children: {
 				li: {
-					// children: {
-					// 	span: {
-					// 		attributes: [
-					// 			'role',
-					// 			'aria-multiline',
-					// 			'id',
-					// 			'contenteditable',
-					// 			'data-wp-block-attribute-key',
-					// 			'style',
-					// 		],
-					// 		classes: [ '*' ],
-					// 		'#text': {},
-					// 	},
-					// 	a: {
-					// 		attributes: [ 'href' ],
-					// 	},
-					// 	// Allow other text content
-					// 	'#text': {},
-					// },
 					children: '*',
 				},
 			},
