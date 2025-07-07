@@ -412,7 +412,7 @@ export const useTaxonomiesMenuItems = ( onClickMenuItem ) => {
 			if ( _needsUniqueIdentifier ) {
 				menuItemTitle = labels.template_name
 					? sprintf(
-							// translators: 1: Name of the template e.g: "Products by Category". 2s: Slug of the taxonomy e.g: "product_cat".
+							// translators: 1: Name of the template e.g: "Products by Category". 2: Slug of the taxonomy e.g: "product_cat".
 							_x( '%1$s (%2$s)', 'taxonomy template menu label' ),
 							labels.template_name,
 							slug

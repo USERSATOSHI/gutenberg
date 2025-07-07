@@ -198,8 +198,8 @@ export default function CoverInspectorControls( {
 								focalPoint: undefined,
 								isRepeated: false,
 								alt: '',
-								sizeSlug: undefined,
 							} );
+							updateImage( DEFAULT_MEDIA_SIZE_SLUG );
 						} }
 						dropdownMenuProps={ dropdownMenuProps }
 					>

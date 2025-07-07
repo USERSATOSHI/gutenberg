@@ -1,11 +1,5 @@
 .block-editor-block-lock-modal {
 	z-index: z-index(".block-editor-block-lock-modal");
-
-	.components-modal__frame {
-		@include break-small() {
-			max-width: $break-mobile;
-		}
-	}
 }
 
 .block-editor-block-lock-modal__options legend {

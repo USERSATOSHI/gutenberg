@@ -242,7 +242,7 @@ export function getAccessibleBlockLabel(
 
 	if ( hasLabel ) {
 		return sprintf(
-			/* translators: accessibility text. %1: The block title. %2: The block label. */
+			/* translators: accessibility text. 1: The block title. 2: The block label. */
 			__( '%1$s Block. %2$s' ),
 			title,
 			label
