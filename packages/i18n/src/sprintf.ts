@@ -4,11 +4,14 @@
 // Disable reason: `eslint-plugin-import` doesn't support `exports` (https://github.com/import-js/eslint-plugin-import/issues/1810)
 // eslint-disable-next-line import/no-unresolved
 import _sprintf from '@tannin/sprintf';
+import memize from 'memize';
 
 /**
  * Internal dependencies
  */
 import type { DistributeSprintfArgs, TranslatableText } from './types';
+
+const logErrorOnce = memize( console.error ); //  eslint-disable-line no-console
 
 export function sprintf< T extends string >(
 	format: T | TranslatableText< T >,
@@ -33,5 +36,15 @@ export function sprintf< T extends string >(
 	format: T | TranslatableText< T >,
 	...args: DistributeSprintfArgs< T >
 ): string {
-	return _sprintf( format as T, ...( args as DistributeSprintfArgs< T > ) );
+	try {
+		return _sprintf(
+			format as T,
+			...( args as DistributeSprintfArgs< T > )
+		);
+	} catch ( error ) {
+		if ( error instanceof Error ) {
+			logErrorOnce( 'sprintf error: \n\n' + error.toString() );
+		}
+		return '';
+	}
 }
