@@ -260,6 +260,11 @@ export default async function fetchLinkSuggestions(
  * also in the search query, divided by the total number of tokens in the title. This gives us a
  * score between 0 and 1, where 1 is a perfect match.
  *
+ * Priority order: exact title match > exact slug match > fuzzy title match > fuzzy slug match.
+ *
+ * Slug matching improves findability when the title and slug differ — for example, when the
+ * title contains characters not allowed in slugs (such as umlauts).
+ *
  * @param results
  * @param search
  */
@@ -268,37 +273,90 @@ export function sortResults( results: SearchResult[], search: string ) {
 
 	const scores = {};
 	for ( const result of results ) {
+		let exactTitleScore = 0;
+		let subTitleScore = 0;
+		let exactSlugScore = 0;
+		let subSlugScore = 0;
+
+		// Title scoring.
 		if ( result.title ) {
 			const titleTokens = tokenize( result.title );
-			const exactMatchingTokens = titleTokens.filter( ( titleToken ) =>
-				searchTokens.some(
-					( searchToken ) => titleToken === searchToken
-				)
-			);
-			const subMatchingTokens = titleTokens.filter( ( titleToken ) =>
-				searchTokens.some(
-					( searchToken ) =>
-						titleToken !== searchToken &&
-						titleToken.includes( searchToken )
-				)
-			);
-
-			// The score is a combination of exact matches and sub-matches.
-			// More weight is given to exact matches, as they are more relevant (e.g. "cat" vs "caterpillar").
-			// Diving by the total number of tokens in the title normalizes the score and skews
-			// the results towards shorter titles.
-			const exactMatchScore =
-				( exactMatchingTokens.length / titleTokens.length ) * 10;
-
-			const subMatchScore = subMatchingTokens.length / titleTokens.length;
-
-			scores[ result.id ] = exactMatchScore + subMatchScore;
-		} else {
-			scores[ result.id ] = 0;
+			if ( titleTokens.length > 0 ) {
+				const exactMatchingTokens = titleTokens.filter(
+					( titleToken ) =>
+						searchTokens.some(
+							( searchToken ) => titleToken === searchToken
+						)
+				);
+				const subMatchingTokens = titleTokens.filter( ( titleToken ) =>
+					searchTokens.some(
+						( searchToken ) =>
+							titleToken !== searchToken &&
+							titleToken.includes( searchToken )
+					)
+				);
+				exactTitleScore =
+					exactMatchingTokens.length / titleTokens.length;
+				subTitleScore = subMatchingTokens.length / titleTokens.length;
+			}
 		}
+
+		// Slug scoring: slugs may differ from titles (e.g. umlauts are not allowed in slugs),
+		// so matching against the slug improves findability.
+		if ( result.url ) {
+			const slug = getSlugFromUrl( result.url );
+			const slugTokens = tokenize( slug );
+
+			if ( slugTokens.length > 0 ) {
+				const exactSlugMatchingTokens = slugTokens.filter(
+					( slugToken ) =>
+						searchTokens.some(
+							( searchToken ) => slugToken === searchToken
+						)
+				);
+				const subSlugMatchingTokens = slugTokens.filter(
+					( slugToken ) =>
+						searchTokens.some(
+							( searchToken ) =>
+								slugToken !== searchToken &&
+								slugToken.includes( searchToken )
+						)
+				);
+				exactSlugScore =
+					exactSlugMatchingTokens.length / slugTokens.length;
+				subSlugScore = subSlugMatchingTokens.length / slugTokens.length;
+			}
+		}
+
+		// Use non-overlapping priority bands to guarantee strict ordering:
+		// exact title > exact slug > fuzzy title > fuzzy slug.
+		// Each ratio is in [0, 1], so multipliers of 1000 / 100 / 10 / 1
+		// ensure no lower-priority combination can outrank a higher-priority match.
+		scores[ result.id ] =
+			exactTitleScore * 1000 +
+			exactSlugScore * 100 +
+			subTitleScore * 10 +
+			subSlugScore;
 	}
 
 	return results.sort( ( a, b ) => scores[ b.id ] - scores[ a.id ] );
+}
+
+/**
+ * Extracts the slug from a URL by returning the last non-empty path segment.
+ *
+ * For example, `"https://example.com/parent/an-example/"` returns `"an-example"`.
+ *
+ * @param url
+ */
+function getSlugFromUrl( url: string ): string {
+	if ( ! url ) {
+		return '';
+	}
+	// Strip protocol and host, then split the remaining path into segments.
+	const path = url.replace( /^https?:\/\/[^/]+/, '' );
+	const segments = path.split( '/' ).filter( Boolean );
+	return segments[ segments.length - 1 ] ?? '';
 }
 
 /**

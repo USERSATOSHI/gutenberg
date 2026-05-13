@@ -430,6 +430,125 @@ describe( 'sortResults', () => {
 		);
 		expect( order ).toEqual( [ 1, 4, 3, 2 ] );
 	} );
+
+	it( 'boosts results whose slug exactly matches the search query above fuzzy title matches with umlauts', () => {
+		// Simulates the reported case: a page titled "Kursübersicht" whose slug is "kurse".
+		// Searching "kurse" should surface it above pages that only partially match on title.
+		const results = [
+			{
+				id: 1,
+				title: 'Kursübersicht', // title only partially contains "kurse"
+				url: 'http://wordpress.local/kurse/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 2,
+				title: 'Freies Training', // neither title nor slug matches
+				url: 'http://wordpress.local/kurse/freies-training/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 3,
+				title: 'Kurse für Anfänger', // title contains "kurse" as an exact token
+				url: 'http://wordpress.local/kurse/anfaenger/',
+				type: 'page',
+				kind: 'post-type',
+			},
+		];
+		const order = sortResults( results, 'kurse' ).map(
+			( result ) => result.id
+		);
+		// "Kurse für Anfänger" (id 3) has an exact title token match — highest priority.
+		// "Kursübersicht" (id 1) has an exact slug match — second priority.
+		// "Freies Training" (id 2) has no match — lowest priority.
+		expect( order ).toEqual( [ 3, 1, 2 ] );
+	} );
+
+	it( 'boosts results whose slug exactly matches the search query above fuzzy title matches', () => {
+		// A page titled "Events Overview" uses the slug "events" so it can serve
+		// as a clean top-level URL. Searching "events" should still find it even
+		// though the title token is "overview", not "events".
+		const results = [
+			{
+				id: 1,
+				title: 'Events Overview', // slug is exact match, title is a partial match
+				url: 'http://wordpress.local/events/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 2,
+				title: 'Annual Gala', // no title or slug match
+				url: 'http://wordpress.local/events/annual-gala/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 3,
+				title: 'Upcoming Events', // title contains "events" as an exact token
+				url: 'http://wordpress.local/events/upcoming/',
+				type: 'page',
+				kind: 'post-type',
+			},
+		];
+		const order = sortResults( results, 'events' ).map(
+			( result ) => result.id
+		);
+		// "Events Overview" (id 1) has an exact slug match and an exact title token match — highest priority.
+		// "Upcoming Events" (id 3) has an exact title token match — second priority.
+		// "Annual Gala" (id 2) has no match — lowest priority.
+		expect( order ).toEqual( [ 1, 3, 2 ] );
+	} );
+
+	it( 'ranks exact title matches above exact slug matches', () => {
+		const results = [
+			{
+				id: 1,
+				title: 'Kursübersicht', // exact slug match only
+				url: 'http://wordpress.local/kurse/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 2,
+				title: 'Kurse', // exact title AND exact slug match
+				url: 'http://wordpress.local/kurse-2/',
+				type: 'page',
+				kind: 'post-type',
+			},
+		];
+		const order = sortResults( results, 'kurse' ).map(
+			( result ) => result.id
+		);
+		expect( order ).toEqual( [ 2, 1 ] );
+	} );
+
+	it( 'ranks exact title matches above exact slug matches (English example)', () => {
+		// "Shop" has both an exact title match and an exact slug match.
+		// "Online Shopping Guide" only matches on slug "shop".
+		const results = [
+			{
+				id: 1,
+				title: 'Online Shopping Guide', // exact slug match only
+				url: 'http://wordpress.local/shop/',
+				type: 'page',
+				kind: 'post-type',
+			},
+			{
+				id: 2,
+				title: 'Shop', // exact title match (slug differs)
+				url: 'http://wordpress.local/store/',
+				type: 'page',
+				kind: 'post-type',
+			},
+		];
+		const order = sortResults( results, 'shop' ).map(
+			( result ) => result.id
+		);
+		expect( order ).toEqual( [ 2, 1 ] );
+	} );
 } );
 
 describe( 'tokenize', () => {
