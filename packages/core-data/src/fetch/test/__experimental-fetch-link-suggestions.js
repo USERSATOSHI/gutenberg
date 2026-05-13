@@ -86,15 +86,29 @@ jest.mock( '@wordpress/api-fetch', () =>
 							'http://localhost:8888/wp-content/uploads/2022/03/test-pdf.pdf',
 					},
 				] );
-			default:
+			// 'contact-page' slug lookup returns the matching page.
+			case '/wp/v2/pages?slug=contact-page&per_page=20&_fields=id%2Clink%2Ctitle%2Ctype':
 				return Promise.resolve( [
 					{
-						id: -1,
-						title: 'missing case or failed',
-						url: path,
-						type: 'missing case or failed',
+						id: 37,
+						link: 'http://wordpress.local/contact-page/',
+						title: { rendered: 'Contact Page' },
+						type: 'page',
 					},
 				] );
+			default:
+				// Slug-based queries for search terms not explicitly mocked above
+				// return empty — no slug match found.
+				if ( /\/wp\/v2\/(pages|posts)\?slug=/.test( path ) ) {
+					return Promise.resolve( [] );
+				}
+				// Any other unhandled path rejects so it is caught by the
+				// production code's .catch(() => []) and returns no results.
+				// If a test expects data from this path it will fail, making
+				// missing mock cases easy to spot without sentinel values leaking.
+				return Promise.reject(
+					new Error( `Unexpected API path in mock: ${ path }` )
+				);
 		}
 	} )
 );
@@ -314,6 +328,25 @@ describe( 'fetchLinkSuggestions', () => {
 					id: 22,
 					title: 'Page Case',
 					url: 'http://wordpress.local/page-case/',
+					type: 'page',
+					kind: 'post-type',
+				},
+			] )
+		);
+	} );
+
+	it( 'returns a page found only by slug when no title matches', () => {
+		// Searching 'contact-page' finds nothing via the title-search API, but
+		// the slug query /wp/v2/pages?slug=contact-page returns the page.
+		return fetchLinkSuggestions( 'contact-page', {
+			type: 'post',
+			subtype: 'page',
+		} ).then( ( suggestions ) =>
+			expect( suggestions ).toEqual( [
+				{
+					id: 37,
+					title: 'Contact Page',
+					url: 'http://wordpress.local/contact-page/',
 					type: 'page',
 					kind: 'post-type',
 				},

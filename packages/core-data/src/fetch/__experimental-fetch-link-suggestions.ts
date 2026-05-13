@@ -81,6 +81,13 @@ export type SearchResult = {
 	kind?: string;
 };
 
+type PostAPIResult = {
+	id: number;
+	link: string;
+	title: { rendered: string };
+	type: string;
+};
+
 /**
  * Fetches link suggestions from the WordPress API.
  *
@@ -214,6 +221,46 @@ export default async function fetchLinkSuggestions(
 		);
 	}
 
+	// Slug-based lookup for post types: the /wp/v2/search API only searches titles,
+	// so pages whose slug and title differ (e.g. slug "kurse", title "Kursübersicht")
+	// won't appear when the user types the slug. A parallel exact-slug query against
+	// the posts/pages endpoints fills that gap. Only fires when there is a search term.
+	if ( search && ( ! type || type === 'post' ) ) {
+		let slugRestBases: string[];
+		if ( subtype === 'post' ) {
+			slugRestBases = [ 'posts' ];
+		} else if ( subtype === 'page' ) {
+			slugRestBases = [ 'pages' ];
+		} else {
+			slugRestBases = [ 'pages', 'posts' ];
+		}
+
+		for ( const restBase of slugRestBases ) {
+			queries.push(
+				apiFetch< PostAPIResult[] >( {
+					path: addQueryArgs( `/wp/v2/${ restBase }`, {
+						slug: search,
+						per_page: perPage,
+						_fields: 'id,link,title,type',
+					} ),
+				} )
+					.then( ( results ) =>
+						results.map( ( result ) => ( {
+							id: result.id,
+							url: result.link,
+							title:
+								decodeEntities(
+									result.title?.rendered || ''
+								) || __( '(no title)' ),
+							type: result.type,
+							kind: 'post-type',
+						} ) )
+					)
+					.catch( () => [] ) // Fail by returning no results.
+			);
+		}
+	}
+
 	if ( ! type || type === 'attachment' ) {
 		queries.push(
 			apiFetch< MediaAPIResult[] >( {
@@ -244,6 +291,15 @@ export default async function fetchLinkSuggestions(
 
 	let results = responses.flat();
 	results = results.filter( ( result ) => !! result.id );
+	// Deduplicate by id — slug queries may return results already found by the title search.
+	const seen = new Set< number | string >();
+	results = results.filter( ( result ) => {
+		if ( seen.has( result.id ) ) {
+			return false;
+		}
+		seen.add( result.id );
+		return true;
+	} );
 	results = sortResults( results, search );
 	results = results.slice( 0, perPage );
 	return results;
