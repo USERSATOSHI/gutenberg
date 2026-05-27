@@ -386,3 +386,29 @@ function _gutenberg_footnotes_force_filtered_html_on_import_filter( $arg ) {
 add_action( 'init', '_gutenberg_footnotes_kses_init' );
 add_action( 'set_current_user', '_gutenberg_footnotes_kses_init' );
 add_filter( 'force_filtered_html_on_import', '_gutenberg_footnotes_force_filtered_html_on_import_filter', 999 );
+
+/**
+ * Maps the 'rich-text' attribute type to 'string' for server-side validation.
+ *
+ * The 'rich-text' type is used in block.json to denote rich text content in the
+ * editor, but it is not a valid JSON Schema type. Since rich text is always a
+ * string on the server side, this mapping ensures that
+ * rest_validate_value_from_schema() can properly validate the attribute without
+ * triggering a _doing_it_wrong notice.
+ *
+ * @since 7.1.0
+ *
+ * @param array $args Block type registration arguments.
+ * @return array Modified block type registration arguments.
+ */
+function gutenberg_map_rich_text_attribute_type( $args ) {
+	if ( isset( $args['attributes'] ) && is_array( $args['attributes'] ) ) {
+		foreach ( $args['attributes'] as $name => $attribute ) {
+			if ( isset( $attribute['type'] ) && 'rich-text' === $attribute['type'] ) {
+				$args['attributes'][ $name ]['type'] = 'string';
+			}
+		}
+	}
+	return $args;
+}
+add_filter( 'register_block_type_args', 'gutenberg_map_rich_text_attribute_type' );
