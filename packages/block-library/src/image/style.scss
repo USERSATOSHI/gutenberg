@@ -304,6 +304,16 @@
 		width: var(--wp--lightbox-container-width);
 		height: var(--wp--lightbox-container-height);
 		z-index: 2000001;
+
+		// Magnified in `setOverlayStyles`.
+		box-sizing: border-box;
+		border-width: var(--wp--lightbox-border-width, 0);
+		border-style: var(--wp--lightbox-border-style, none);
+		border-color: var(--wp--lightbox-border-color, currentColor);
+		border-top-left-radius: var(--wp--lightbox-border-top-left-radius, 0);
+		border-top-right-radius: var(--wp--lightbox-border-top-right-radius, 0);
+		border-bottom-right-radius: var(--wp--lightbox-border-bottom-right-radius, 0);
+		border-bottom-left-radius: var(--wp--lightbox-border-bottom-left-radius, 0);
 	}
 
 	.wp-block-image {
@@ -323,6 +333,10 @@
 			min-height: var(--wp--lightbox-image-height);
 			width: var(--wp--lightbox-image-width);
 			height: var(--wp--lightbox-image-height);
+
+			// Painted by the container.
+			border: 0;
+			border-radius: 0;
 		}
 
 		figcaption {

@@ -58,6 +58,23 @@ function getImageSrcset( { lightboxSrcset } ) {
 	return lightboxSrcset || '';
 }
 
+/**
+ * Magnifies the `px` components of a computed border radius.
+ *
+ * @param {string} radius Computed value of a `border-*-radius` longhand.
+ * @param {number} scale  Lightbox zoom scale.
+ * @return {string} The radius divided by the scale.
+ */
+function magnifyRadius( radius, scale ) {
+	// Percentages resolve against the magnified box, so they need no scaling.
+	return radius
+		.split( ' ' )
+		.map( ( part ) =>
+			part.endsWith( 'px' ) ? `${ parseFloat( part ) / scale }px` : part
+		)
+		.join( ' ' );
+}
+
 const { state, actions, callbacks } = store(
 	'core/image',
 	{
@@ -167,12 +184,12 @@ const { state, actions, callbacks } = store(
 				);
 			},
 			get imgStyles() {
+				// The container paints the border, so strip it here.
 				return (
 					state.overlayOpened &&
-					`${ state.selectedImage.imgStyles?.replace(
-						/;$/,
-						''
-					) }; object-fit:cover;`
+					`${ state.selectedImage.imgStyles
+						?.replace( /(^|;)\s*border[\w-]*\s*:[^;]*/g, '$1' )
+						.replace( /;$/, '' ) }; object-fit:cover;`
 				);
 			},
 			get isContentHidden() {
@@ -564,10 +581,75 @@ const { state, actions, callbacks } = store(
 				}
 
 				const containerScale = originalWidth / containerWidth;
-				const lightboxImgWidth =
+				let lightboxImgWidth =
 					imgMaxWidth * ( containerWidth / containerMaxWidth );
-				const lightboxImgHeight =
+				let lightboxImgHeight =
 					imgMaxHeight * ( containerHeight / containerMaxHeight );
+
+				// The zoom scales the container, so `width / scale` makes the
+				// border match the page image in the frame where they swap over.
+				// Not for `contain`, whose geometry tracks the painted image.
+				let borderStyles = '';
+
+				if (
+					state.selectedImage.scaleAttr !== 'contain' &&
+					containerScale > 0 &&
+					Number.isFinite( containerScale )
+				) {
+					const computedStyle = window.getComputedStyle(
+						state.selectedImage.imageRef
+					);
+					const sides = [ 'Top', 'Right', 'Bottom', 'Left' ];
+					const [ borderTop, borderRight, borderBottom, borderLeft ] =
+						sides.map(
+							( side ) =>
+								parseFloat(
+									computedStyle[ `border${ side }Width` ]
+								) / containerScale
+						);
+
+					// Inset the image by the magnified border, as on the page.
+					lightboxImgWidth *= Math.max(
+						( containerWidth - borderLeft - borderRight ) /
+							containerWidth,
+						0
+					);
+					lightboxImgHeight *= Math.max(
+						( containerHeight - borderTop - borderBottom ) /
+							containerHeight,
+						0
+					);
+
+					const radii = [
+						[ 'TopLeft', 'top-left' ],
+						[ 'TopRight', 'top-right' ],
+						[ 'BottomRight', 'bottom-right' ],
+						[ 'BottomLeft', 'bottom-left' ],
+					].map(
+						( [ corner, name ] ) =>
+							`--wp--lightbox-border-${ name }-radius: ${ magnifyRadius(
+								computedStyle[ `border${ corner }Radius` ],
+								containerScale
+							) };`
+					);
+
+					borderStyles = `
+						--wp--lightbox-border-width: ${ borderTop }px ${ borderRight }px ${ borderBottom }px ${ borderLeft }px;
+						--wp--lightbox-border-style: ${ sides
+							.map(
+								( side ) =>
+									computedStyle[ `border${ side }Style` ]
+							)
+							.join( ' ' ) };
+						--wp--lightbox-border-color: ${ sides
+							.map(
+								( side ) =>
+									computedStyle[ `border${ side }Color` ]
+							)
+							.join( ' ' ) };
+						${ radii.join( '\n\t\t\t\t\t\t' ) }
+					`;
+				}
 
 				// As of this writing, using the calculations above will render the
 				// lightbox with a small, erroneous whitespace on the left side of the
@@ -586,6 +668,7 @@ const { state, actions, callbacks } = store(
 					--wp--lightbox-scrollbar-width: ${
 						window.innerWidth - document.documentElement.clientWidth
 					}px;
+					${ borderStyles }
 				`;
 			},
 			setButtonStyles() {

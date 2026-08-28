@@ -996,6 +996,133 @@ test.describe( 'Image - lightbox', () => {
 			} );
 			expect( margin ).toBe( '0px' );
 		} );
+
+		// Regression test for https://github.com/WordPress/gutenberg/issues/63567.
+		test( "Overlay container should magnify the content image's border", async ( {
+			editor,
+			page,
+		} ) => {
+			await editor.setContent( `<!-- wp:image {"id":${ uploadedMedia.id },"sizeSlug":"full","linkDestination":"none",
+			"lightbox":{"enabled":true},"style":{"border":{"width":"30px","radius":"20px","color":"#000000","style":"solid"}}} -->
+			<figure class="wp-block-image size-full has-custom-border">
+			<img src="${ uploadedMedia.source_url }" alt="" class="has-border-color wp-image-${ uploadedMedia.id }" style="border-color:#000000;border-style:solid;border-width:30px;border-radius:20px"/></figure>
+			<!-- /wp:image --> ` );
+
+			const postId = await editor.publishPost();
+			await page.goto( `/?p=${ postId }` );
+
+			const contentImage = page.locator( '.wp-lightbox-container img' );
+			await expect( contentImage ).toBeVisible();
+			// The border leaves the trigger button covering the small test image.
+			await page.locator( '.lightbox-trigger' ).click();
+
+			const container = page
+				.locator( '.wp-lightbox-overlay .lightbox-image-container' )
+				.first();
+			await expect( container ).toBeVisible();
+
+			// The zoom scales the container from `--wp--lightbox-scale` to 1, so
+			// the border must be declared at `width / scale` to line up.
+			const { containerBorder, scale, contentBorder } =
+				await container.evaluate( ( element ) => {
+					const overlay = element.closest( '.wp-lightbox-overlay' );
+					return {
+						containerBorder: parseFloat(
+							window.getComputedStyle( element ).borderTopWidth
+						),
+						scale: parseFloat(
+							window
+								.getComputedStyle( overlay )
+								.getPropertyValue( '--wp--lightbox-scale' )
+						),
+						contentBorder: parseFloat(
+							window.getComputedStyle(
+								document.querySelector(
+									'.wp-lightbox-container img'
+								)
+							).borderTopWidth
+						),
+					};
+				} );
+
+			expect( contentBorder ).toBe( 30 );
+			expect( scale ).toBeGreaterThan( 0 );
+			expect( containerBorder ).toBeCloseTo( contentBorder / scale, 0 );
+
+			// The border belongs to the container, not to the image inside it,
+			// so that it survives the container's `overflow: hidden`.
+			const overlayImageBorder = await page
+				.locator( '.wp-lightbox-overlay .wp-block-image img' )
+				.first()
+				.evaluate(
+					( element ) =>
+						window.getComputedStyle( element ).borderTopWidth
+				);
+			expect( overlayImageBorder ).toBe( '0px' );
+		} );
+
+		// When the displayed ratio differs from the full-size ratio, the lightbox
+		// `img` overflows its container so that `overflow: hidden` crops it. A
+		// border on the `img` is clipped away with the overflow.
+		test( 'Overlay should keep the border on a cropped image', async ( {
+			editor,
+			page,
+			requestUtils,
+		} ) => {
+			const largeMedia = await requestUtils.uploadMedia(
+				'./assets/3200x2400_e2e_test_image_responsive_lightbox.jpeg'
+			);
+			// The 1:1 thumbnail differs in ratio from the 4:3 original, which is
+			// what makes the lightbox `img` overflow.
+			const thumb = largeMedia.media_details.sizes.thumbnail;
+
+			await editor.setContent( `<!-- wp:image {"id":${ largeMedia.id },"sizeSlug":"thumbnail","aspectRatio":"16/9","scale":"cover","linkDestination":"none",
+			"lightbox":{"enabled":true},"style":{"border":{"width":"20px","color":"#000000","style":"solid"}}} -->
+			<figure class="wp-block-image size-thumbnail has-custom-border">
+			<img src="${ thumb.source_url }" alt="" class="has-border-color wp-image-${ largeMedia.id }" style="border-color:#000000;border-style:solid;border-width:20px;aspect-ratio:16/9;object-fit:cover"/></figure>
+			<!-- /wp:image --> ` );
+
+			const postId = await editor.publishPost();
+			await page.goto( `/?p=${ postId }` );
+
+			await expect(
+				page.locator( '.wp-lightbox-container img' )
+			).toBeVisible();
+			await page.locator( '.lightbox-trigger' ).click();
+
+			const container = page
+				.locator( '.wp-lightbox-overlay .lightbox-image-container' )
+				.first();
+			await expect( container ).toBeVisible();
+
+			const { containerBorder, scale, imageOverflows, imageBorder } =
+				await container.evaluate( ( element ) => {
+					const overlay = element.closest( '.wp-lightbox-overlay' );
+					const image = element.querySelector( 'img' );
+					return {
+						containerBorder: parseFloat(
+							window.getComputedStyle( element ).borderTopWidth
+						),
+						scale: parseFloat(
+							window
+								.getComputedStyle( overlay )
+								.getPropertyValue( '--wp--lightbox-scale' )
+						),
+						// Confirms this is the cropped case; the content box is
+						// what `overflow: hidden` clips to.
+						imageOverflows:
+							image.getBoundingClientRect().height >
+							element.clientHeight,
+						imageBorder:
+							window.getComputedStyle( image ).borderTopWidth,
+					};
+				} );
+
+			expect( imageOverflows ).toBe( true );
+			// The border is on the container, so the overflow cannot clip it.
+			expect( imageBorder ).toBe( '0px' );
+			expect( containerBorder ).toBeCloseTo( 20 / scale, 0 );
+		} );
 	} );
 } );
 
